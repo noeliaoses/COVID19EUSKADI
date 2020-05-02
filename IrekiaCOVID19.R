@@ -1,10 +1,16 @@
 ###################################################################################
 ###################################################################################
-require(XML)
-require(data.table)
-require(RCurl)
+library(XML)
+library(data.table)
+library(RCurl)
 library(jsonlite)
 library(tidyverse)
+library(maptools)
+library(RJSONIO)
+library(ggplot2)
+library(rgeos)
+library(rgdal)
+library(maptools)
 ###################################################################################
 ###################################################################################
 covid19jsonurl <- "https://opendata.euskadi.eus/contenidos/ds_informes_estudios/covid_19_2020/opendata/covid19.json"
@@ -13,15 +19,20 @@ colTTHH <- c("Araba"="darkgreen", "Bizkaia"="red", "Gipuzkoa"="blue", "Euskadi"=
 # x.json eta x_bydate.json datu berdinak dituzte baina modu desberdinean antolatuta
 ###################################################################################
 ###################################################################################
-GetCovid19Metadata <- function(covid19irekiajsonural){
+GetCovid19Metadata <- function(covid19irekiajsonurl){
   print("GetCovid19Metadata")
-  dateanditems <- jsonlite::fromJSON(covid19irekiajsonural, flatten=TRUE)
-  items <- as.data.table(dateanditems$items)
+  covid19json <- fromJSON(getURL(covid19irekiajsonurl, encoding = "UTF-8"), flatten=TRUE)
+  items <- NULL
+  for(n in 1:length(covid19json$items)){
+    l <- covid19json$items[[n]]
+    dt <- data.table(url=l$url, name.SPANISH=l$name[["SPANISH"]], name.BASQUE=l$name[["BASQUE"]])
+    items <- rbind(items, dt)
+  }
   # por fecha
   itemsbydate <- items[ grep("fecha",name.SPANISH) ]
   # totales
   otheritems <- items[ grep("fecha",name.SPANISH, invert=TRUE) ]
-  jsondata <- list(lastupdate=dateanditems$lastUpdateDate,
+  jsondata <- list(lastupdate=covid19json$lastUpdateDate,
                    byDateJsonUrlsAndNames=itemsbydate,
                    jsonUrlsAndNames=otheritems)
   return(jsondata)
@@ -31,10 +42,10 @@ GetCovid19Metadata <- function(covid19irekiajsonural){
 # ANALISIS
 ###################################################################################
 ###################################################################################
-GetIrekiaCovid19AnalisisData <- function(covid19jsonurl, spanishdataname="Análisis"){
+GetIrekiaCovid19AnalisisData <- function(covid19jsonurl, basquedataname="Egindako analisiak"){
   print("GetIrekiaCovid19AnalisisData")
   jsonlist <- GetCovid19Metadata(covid19jsonurl)
-  analisisjson <- jsonlist$jsonUrlsAndNames[grep(spanishdataname,name.SPANISH), url]
+  analisisjson <- jsonlist$jsonUrlsAndNames[grep(basquedataname,name.BASQUE), url]
   analisislist <- fromJSON(getURL(analisisjson, encoding = "latin1"), flatten=TRUE)
   analisisname <- analisislist$name[["SPANISH"]]
   analisislastupdate <- analisislist$lastUpdateDate
@@ -168,7 +179,7 @@ GetIrekiaCovid19HospitalizacionesData <- function(covid19jsonurl, spanishdatanam
   print("GetIrekiaCovid19HospitalizacionesData")
   jsonlist <- GetCovid19Metadata(covid19jsonurl)
   hospitaljson <- jsonlist$jsonUrlsAndNames[grep(spanishdataname,name.SPANISH), url]
-  hospitallist <- fromJSON(getURL(hospitaljson, encoding = "latin1"), flatten=TRUE)
+  hospitallist <- fromJSON(getURL(hospitaljson, encoding = "UTF-8"), flatten=TRUE, encoding = "UTF-8")
   hospitalname <- hospitallist$name[["SPANISH"]]
   hospitallastupdate <- hospitallist$lastUpdateDate
   ###############################
@@ -199,6 +210,8 @@ GetIrekiaCovid19HospitalizacionesData <- function(covid19jsonurl, spanishdatanam
     }
     hospitalbydatedt <- hospitalbydatedt[value>-1]
   }
+  hospitalbydatedt[grep("Ã<81>LAVA", hospital), hospital:=gsub("Ã<81>LAVA","ÁLAVA", hospital)]
+  hospitalbydatedt[grep("ASUNCIÃ“N", hospital), hospital:=gsub("ASUNCIÃ“N","ASUNCIÓN", hospital)]
   ###############################
   # metadata
   md <- hospitallist$metaData
@@ -231,21 +244,35 @@ GetIrekiaCovid19HospitalizacionesData <- function(covid19jsonurl, spanishdatanam
 }
 ###################################################################################
 ###################################################################################
-PlotHospitalizacionesByDate <- function(hospitallist, hospitales=NA){
+PlotHospitalizacionesByDate <- function(hospitallist, hospitales="ALL"){
   hospitalbydatedt <- hospitallist$hospitalbydatedt
   dt <- hospitalbydatedt[value>-1]
   dt <- dt[!grep("OSPITALERATUTAKO", hospital)]
-  if( !is.na(hospitales) ){
+  if( hospitales!="ALL" ){
     dt <- dt[hospital %in% hospitales]
   }
   dt <- dt[variable!="totalPeopleCount"]
   for( var in dt[,unique(variable)] ){
     dt[variable==var, variable:=hospitallist$hospitalvars[id==var, resumen]]
   }
+  fechasdt <- data.table(fecha=dt[, unique(as.Date(date))])
+  fechasdt[order(fecha), N:=1:.N]
+  fechasdt[, fechares:=""]
+  fechasdt[N%%5==0, fechares:=as.character(as.Date(fecha))]
+  fechasdt[N==1, fechares:=as.character(as.Date(fecha))]
+  fechasdt[N==.N, fechares:=as.character(as.Date(fecha))]
+  dt[, fecha:=as.Date(date)]
+  dt <- merge(dt, fechasdt[,.(fecha, fechares)], by="fecha")
+  dt[, fecha:=as.character(fecha)]
+  fechasdt <- fechasdt[order(fecha)]
   # plot
-  gg <- ggplot(dt, aes(x=as.character(as.Date(date)), y=value))
+  gg <- ggplot(dt, aes(x=fecha, y=value))
   gg <- gg + geom_bar(stat="identity", aes(fill=hospital))
-  gg <- gg + theme(legend.position="bottom", axis.text.x = element_text(angle = 90))
+  gg <- gg + theme(legend.position="bottom",
+                   # axis.text.x = element_text(angle = 90, size=4),
+                   axis.text.x = element_text(angle = 90),
+                   legend.text=element_text(size=5),
+                   legend.title=element_text(size=6))
   gg <- gg + xlab("Fecha") + ylab("Número")
   gg <- gg + facet_grid(.~variable)
   return(gg)
@@ -279,7 +306,7 @@ GetIrekiaCovid19LetalidadData <- function(covid19jsonurl, spanishdataname="letal
   print("GetIrekiaCovid19LetalidadData")
   jsonlist <- GetCovid19Metadata(covid19jsonurl)
   letalidadjson <- jsonlist$jsonUrlsAndNames[grep(spanishdataname,name.SPANISH), url]
-  letalidadlist <- fromJSON(getURL(letalidadjson, encoding = "latin1"), flatten=TRUE)
+  letalidadlist <- fromJSON(getURL(letalidadjson, encoding = "UTF-8"), flatten=TRUE, encoding = "UTF-8")
   letalidadname <- letalidadlist$name[["SPANISH"]]
   letalidadlastupdate <- letalidadlist$lastUpdateDate
   letalidadnotes <- letalidadlist$notes[["SPANISH"]]
@@ -341,6 +368,8 @@ GetIrekiaCovid19LetalidadData <- function(covid19jsonurl, spanishdataname="letal
   letalidadbyagerangedt[, medida:=gsub("positive","Positivos",medida)]
   letalidadbyagerangedt[, medida:=gsub("death","Fallecimientos",medida)]
   letalidadbyagerangedt[, medida:=gsub("LethalityRate","Letalidad",medida)]
+  letalidadbyagerangedt[grep("aÃ±os", ageRange), ageRange:=gsub("aÃ±os", "años", ageRange)]
+  letalidadbyagerangedt[grep("mÃ¡s", ageRange), ageRange:=gsub("mÃ¡s", "más", ageRange)]
   # metadata
   md <- letalidadlist$metaData
   mdnames <- names(md)
@@ -405,13 +434,27 @@ GetIrekiaCovid19MunicipioData <- function(covid19jsonurl, spanishdataname="munic
   Municipionotes <- Municipiolist$notes[["SPANISH"]]
   # convert data to data table
   # byDate
+  mainnames <- c("date", "items")
   bydatelistnames <- names(Municipiolist$byDate)
-  somenames <- c("date", "items", "total.positiveMenCount", "total.positiveWomenCount", "total.positiveTotalCount",
-                 "total.deathMenCount", "total.deathWomenCount", "total.deathCount", "total.menLethalityRate",
-                 "total.womenLethalityRate", "total.totalLethalityRate")
-  res <- table(sort(bydatelistnames)==sort(somenames))
+  if( !is.null(bydatelistnames) ){
+    res <- table(mainnames %in% bydatelistnames)
+  }else{
+    res <- list("FALSE"=1)
+  }
   if( (length(res)==1) && (names(res)=="TRUE") ){
-  
+    # items
+    Municipiobydatedt <- NULL
+    for(n in 1:length(Municipiolist$byDate$date)){
+      dt <- as.data.table(Municipiolist$byDate$items[[n]])
+      dt[, date:=Municipiolist$byDate$date[[n]]]
+      oldcols <- colnames(dt)
+      newcols <- gsub("geoMunicipality.oid.id","id",oldcols)
+      newcols <- gsub("geoMunicipality.nameByLang.SPANISH","name",newcols)
+      newcols <- gsub("geoMunicipality.nameByLang.BASQUE","BASQUE",newcols)
+      setnames(dt, oldcols, newcols)
+      dt[, BASQUE:=NULL]
+      Municipiobydatedt <- rbind(Municipiobydatedt, dt)
+    }
   }else{
     Municipiobydatedt <- NULL
     for(n in 1:length(Municipiolist$byDate)){
@@ -429,10 +472,20 @@ GetIrekiaCovid19MunicipioData <- function(covid19jsonurl, spanishdataname="munic
   }
   # metadata
   md <- Municipiolist$metaData
-  municipiovars <- NULL
-  for(i in 1:length(md)){
-    municipiovars <- rbind(municipiovars,
-                           data.table(id=md[[i]]$id, value=md[[i]]$name[["SPANISH"]]))
+  mdnames <- names(md)
+  somenames <- c("id.id", "name.SPANISH", "name.BASQUE" )
+  res <- table(sort(mdnames)==sort(somenames))
+  if( (length(res)==1) && (names(res)=="TRUE") ){
+    municipiovars <- as.data.table(Municipiolist$metaData)
+    municipiovars[, id:=id.id]
+    municipiovars <- melt(municipiovars[, .(id, name.SPANISH, name.BASQUE)], id.vars = "id", variable.name = "lang", value.name = "value")
+    municipiovars[, lang:=gsub("name.", "", lang)]
+  }else{
+    municipiovars <- NULL
+    for(i in 1:length(md)){
+      municipiovars <- rbind(municipiovars,
+                             data.table(id=md[[i]]$id, value=md[[i]]$name[["SPANISH"]]))
+    }
   }
   return(list(dataname=Municipioname,
               lastupdate=Municipiolastupdate,
@@ -459,7 +512,6 @@ GetCodigosPostalesEuskadi <- function(){
 ###################################################################################
 ###################################################################################
 GetEuskalgeoMunicipiosShapeFile <- function(onlyEuskadi=TRUE){
-  library(rgdal)
   ## Download shape file and unzip from Euskalgeo
   if (!file.exists("./data/shp/udalerriak/udalerriak.shp")){ 
     udalerriak.url <- "http://www.euskalgeo.net/sites/euskalgeo.net/files/fitxategi-eranskin/udalerriak.zip"
@@ -546,27 +598,60 @@ GetIrekiaCovid19ZonaDeSaludData <- function(covid19jsonurl, spanishdataname="zon
   zonadesaludnotes <- zonadesaludlist$notes[["SPANISH"]]
   # convert data to data table
   # byDate
-  zonadesaludbydatedt <- NULL
-  for(n in 1:length(zonadesaludlist$byDate)){
-    l <- zonadesaludlist$byDate[[n]]
-    # items: by date
-    for(i in 1:length(l$items)){
-      ll <- l$items[[i]]
-      dt <- data.table(id=ll$geoRegion$oid,
-                       name=ll$geoRegion$nameByLang[["SPANISH"]], 
-                       population=ll$population,
-                       positiveCount=ll$positiveCount,
-                       positiveRate=ll$positiveRate)
-      dt[, date:=l$date]
+  mainnames <- c("date", "items")
+  bydatelistnames <- names(zonadesaludlist$byDate)
+  if( !is.null(bydatelistnames) ){
+    res <- table(mainnames %in% bydatelistnames)
+  }else{
+    res <- list("FALSE"=1)
+  }
+  if( (length(res)==1) && (names(res)=="TRUE") ){
+    # items
+    zonadesaludbydatedt <- NULL
+    for(n in 1:length(zonadesaludlist$byDate$date)){
+      dt <- as.data.table(zonadesaludlist$byDate$items[[n]])
+      dt[, date:=zonadesaludlist$byDate$date[[n]]]
+      oldcols <- colnames(dt)
+      newcols <- gsub("geoRegion.oid.id","id",oldcols)
+      newcols <- gsub("geoRegion.nameByLang.SPANISH","name",newcols)
+      newcols <- gsub("geoRegion.nameByLang.BASQUE","BASQUE",newcols)
+      setnames(dt, oldcols, newcols)
+      dt[, BASQUE:=NULL]
       zonadesaludbydatedt <- rbind(zonadesaludbydatedt, dt)
+    }
+  }else{
+    zonadesaludbydatedt <- NULL
+    for(n in 1:length(zonadesaludlist$byDate)){
+      l <- zonadesaludlist$byDate[[n]]
+      # items: by date
+      for(i in 1:length(l$items)){
+        ll <- l$items[[i]]
+        dt <- data.table(id=ll$geoRegion$oid,
+                         name=ll$geoRegion$nameByLang[["SPANISH"]], 
+                         population=ll$population,
+                         positiveCount=ll$positiveCount,
+                         positiveRate=ll$positiveRate)
+        dt[, date:=l$date]
+        zonadesaludbydatedt <- rbind(zonadesaludbydatedt, dt)
+      }
     }
   }
   # metadata
   md <- zonadesaludlist$metaData
-  zonadesaludvars <- NULL
-  for(i in 1:length(md)){
-    zonadesaludvars <- rbind(zonadesaludvars,
-                           data.table(id=md[[i]]$id, value=md[[i]]$name[["SPANISH"]]))
+  mdnames <- names(md)
+  somenames <- c("id.id", "name.SPANISH", "name.BASQUE" )
+  res <- table(sort(mdnames)==sort(somenames))
+  if( (length(res)==1) && (names(res)=="TRUE") ){
+    zonadesaludvars <- as.data.table(zonadesaludlist$metaData)
+    zonadesaludvars[, id:=id.id]
+    zonadesaludvars <- melt(zonadesaludvars[, .(id, name.SPANISH, name.BASQUE)], id.vars = "id", variable.name = "lang", value.name = "value")
+    zonadesaludvars[, lang:=gsub("name.", "", lang)]
+  }else{
+    zonadesaludvars <- NULL
+    for(i in 1:length(md)){
+      zonadesaludvars <- rbind(zonadesaludvars,
+                               data.table(id=md[[i]]$id, value=md[[i]]$name[["SPANISH"]]))
+    }
   }
   return(list(dataname=zonadesaludname,
               lastupdate=zonadesaludlastupdate,
@@ -577,7 +662,6 @@ GetIrekiaCovid19ZonaDeSaludData <- function(covid19jsonurl, spanishdataname="zon
 ###################################################################################
 ###################################################################################
 GetEuskalgeoZonasDeSaludShapeFile <- function(){
-  library(rgdal)
   ## Download shape file and unzip from Euskalgeo
   if (!file.exists("./data/shp/zonasdesalud/OsasunEremuak_ZonasSalud_A_2018.shp")){ 
     zonasdesalud.url <- "ftp://ftp.geo.euskadi.eus/cartografia/Salud/Zonas_Salud/OsasunEremuak_ZonasSalud_A_2018.zip"

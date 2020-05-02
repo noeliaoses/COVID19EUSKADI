@@ -28,15 +28,17 @@ shinyUI(fluidPage(
                         'selectTTHH', 'Elige el/los TTHH a mostrar: ', choices = c("Araba", "Bizkaia", "Gipuzkoa", "Euskadi"), selected=c("Euskadi"), multiple = TRUE
                       ))),
              fluidRow(style = "padding-left: 20px; padding-top: 10px;",
-                      column(3,h3("Positivos acumulados:")),
-                      column(3,h3("Positivos nuevos:")),
-                      column(3,h3("Positivos nuevos por día de la semana:")),
-                      column(3,h3("Porcentaje de tests positivos:"))),
+                      column(4,h3("Positivos acumulados:")),
+                      column(4,h3("Positivos nuevos:")),
+                      column(4,h3("Positivos nuevos por día de la semana:"))#,
+                      # column(3,h3("Porcentaje de tests positivos:"))
+                      ),
              fluidRow(style = "padding-left: 20px; padding-top: 10px;",
-                      column(3,plotOutput("positivosAcumuladosPorTTHH")),
-                      column(3,plotOutput("positivosNuevosPorTTHH")),
-                      column(3,plotOutput("positivosNuevospordiadelasemana")),
-                      column(3,plotOutput("porcentajePositivosPorTTHH")))
+                      column(4,plotOutput("positivosAcumuladosPorTTHH")),
+                      column(4,plotOutput("positivosNuevosPorTTHH")),
+                      column(4,plotOutput("positivosNuevospordiadelasemana"))#,
+                      # column(3,plotOutput("porcentajePositivosPorTTHH"))
+                      )
     ),
     
     # ###################################################################################

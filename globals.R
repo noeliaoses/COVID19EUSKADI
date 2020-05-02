@@ -7,23 +7,18 @@ covid19jsonurl <- "https://opendata.euskadi.eus/contenidos/ds_informes_estudios/
 print(covid19jsonurl)
 
 print("Datos análisis")
-analisisdataname <- "Análisis"
-analisislist <- GetIrekiaCovid19AnalisisData(covid19jsonurl, spanishdataname=analisisdataname)
+analisislist <- GetIrekiaCovid19AnalisisData(covid19jsonurl)
 
 print("Datos hospitales")
-hospitalizacionesdataname <- "Hospital"
-hospitaleslist <- GetIrekiaCovid19HospitalizacionesData(covid19jsonurl, spanishdataname=hospitalizacionesdataname)
+hospitaleslist <- GetIrekiaCovid19HospitalizacionesData(covid19jsonurl)
 hospitales <- hospitaleslist$hospitals
 
 print("Datos letalidad")
-letalidaddataname <- "letalidad"
-letalidadlist <- GetIrekiaCovid19LetalidadData(covid19jsonurl, spanishdataname=letalidaddataname)
+letalidadlist <- GetIrekiaCovid19LetalidadData(covid19jsonurl)
 
 print("Datos municipios")
-pormunicipiodataname <- "municipio"
-municipiolist <- GetIrekiaCovid19MunicipioData(covid19jsonurl, spanishdataname=pormunicipiodataname)
+municipiolist <- GetIrekiaCovid19MunicipioData(covid19jsonurl)
 
 print("Datos zonas de salud")
-porzonasdesaluddataname <- "zonas de salud"
-zonasdesaludlist <- GetIrekiaCovid19ZonaDeSaludData(covid19jsonurl, spanishdataname=porzonasdesaluddataname)
+zonasdesaludlist <- GetIrekiaCovid19ZonaDeSaludData(covid19jsonurl)
 print("=================================================================================================")

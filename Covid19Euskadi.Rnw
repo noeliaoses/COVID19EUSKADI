@@ -4,6 +4,8 @@
 \usepackage{url}
 \usepackage{float}
 \usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage[T1]{fontenc}
 \usepackage{amsmath}
 \usepackage{color}
 \usepackage{hyperref}
@@ -31,17 +33,10 @@ library(tidyverse)
 library(RJSONIO)
 source("IrekiaCOVID19.R")
 covid19jsonurl <- "https://opendata.euskadi.eus/contenidos/ds_informes_estudios/covid_19_2020/opendata/covid19.json"
-dateanditems <- jsonlite::fromJSON(covid19jsonurl, flatten=TRUE)
-lastupdate <- dateanditems$lastUpdateDate
-items <- as.data.table(dateanditems$items)
-# Imanol, Open Data Euskadi:
-# x.json eta x_bydate.json datu berdinak dituzte baina modu desberdinean antolatuta
-itemsbydate <- items[ grep("fecha",name.SPANISH) ]
-otheritems <- items[ grep("fecha",name.SPANISH, invert=TRUE) ]
+dateanditems <- GetCovid19Metadata(covid19jsonurl)
 @
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% \noindent Última actualización de los datos: \Sexpr{as.POSIXct(lastupdate,format="%Y-%m-%dT%H:%M:%S",tz=Sys.timezone())}
 % \url{http://www.euskadi.eus/boletin-de-datos-sobre-la-evolucion-del-coronavirus/web01-a2korona/es/}
 
 % \url{https://portalcne.isciii.es/covid19/?mc_cid=d2f2d87e87&mc_eid=14d19240b8}
@@ -50,7 +45,7 @@ otheritems <- items[ grep("fecha",name.SPANISH, invert=TRUE) ]
 % \section{Análisis}
 
 <<echo=FALSE, results=hide>>=
-analisislist <- GetIrekiaCovid19AnalisisData(covid19jsonurl, spanishdataname="Análisis")
+analisislist <- GetIrekiaCovid19AnalisisData(covid19jsonurl)
 analisistotaldt <- analisislist$analisistotaldt
 analisisbydatedt <- analisislist$analisisbydatedt
 @
@@ -64,31 +59,32 @@ analisisbydatedt <- analisislist$analisisbydatedt
 
 <<echo=FALSE, results=hide>>=
 dt <- as.data.table(dcast(analisistotaldt, TTHH~Variable, value.var="Count"))
-dt[, TotalTests:=Negativo+Positivo]
-dt[, Total:=NULL]
+# dt[, TotalTests:=Negativo+Positivo]
+# dt[, Total:=NULL]
 dt[TTHH=="Euskadi", TTHH:="TOTAL"]
 dt <- dt[order(TTHH)]
-oldcols <- colnames(dt)
-newcols <- gsub("Positivo","POSITIVO",oldcols)
-newcols <- gsub("Negativo","NO POSITIVO",newcols)
-newcols <- gsub("TotalTests","TOTAL TESTS",newcols)
-setnames(dt,oldcols,newcols)
+# oldcols <- colnames(dt)
+# newcols <- gsub("Positivo","POSITIVO",oldcols)
+# newcols <- gsub("Negativo","NO POSITIVO",newcols)
+# newcols <- gsub("TotalTests","TOTAL TESTS",newcols)
+# setnames(dt,oldcols,newcols)
 @
 
 <<echo=FALSE, results=tex>>=
 print(xtable(dt), include.rownames=FALSE,table.placement="H")
 @
 
+\newpage
 \noindent \textbf{Por fecha de validación:}
 
 <<echo=FALSE, results=hide>>=
 dt <- analisisbydatedt[TTHH=="Euskadi"]
 dt[, TTHH:=NULL]
 dt <- as.data.table(dcast(dt, date~Variable, value.var="Count"))
-dt <- dt[, .(date,Positivo,Negativo,Total)]
+# dt <- dt[, .(date,Positivo,Negativo,Total)]
 dt <- dt[order(date)]
 dt[, date:=as.character(as.Date(date))]
-setnames(dt,colnames(dt),c("Fecha de validación","POSITIVO","NO POSITIVO","TOTAL"))
+# setnames(dt,colnames(dt),c("Fecha de validación","POSITIVO","NO POSITIVO","TOTAL"))
 @
 
 <<echo=FALSE, results=tex>>=
@@ -192,33 +188,34 @@ ggsave(filename="./FIGS/PositivosNuevosPorDiaDeLaSemanaEuskadi.pdf", plot=gg)
 \label{}
 \end{figure}
 
-\subsection{Porcentaje de tests positivos por TTHH en Euskadi}
+% \subsection{Porcentaje de tests positivos por TTHH en Euskadi}
 
 <<echo=FALSE, results=hide>>=
-gg <- PlotPorcentajePositivosPorTTHH(analisislist, plotTTHH=c("Araba", "Bizkaia", "Gipuzkoa"))
-ggsave(filename="./FIGS/PorcentajePositivosPorTTHH.pdf", plot=gg)
-gg <- PlotPorcentajePositivosPorTTHH(analisislist, plotTTHH=c("Euskadi"))
-ggsave(filename="./FIGS/PorcentajePositivosEuskadi.pdf", plot=gg)
+# gg <- PlotPorcentajePositivosPorTTHH(analisislist, plotTTHH=c("Araba", "Bizkaia", "Gipuzkoa"))
+# ggsave(filename="./FIGS/PorcentajePositivosPorTTHH.pdf", plot=gg)
+# gg <- PlotPorcentajePositivosPorTTHH(analisislist, plotTTHH=c("Euskadi"))
+# ggsave(filename="./FIGS/PorcentajePositivosEuskadi.pdf", plot=gg)
 @
 
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.45\textwidth}
-\includegraphics{./FIGS/PorcentajePositivosPorTTHH.pdf}
-\caption{TTHH en Euskadi}
-\label{}
-\end{subfigure}
-\begin{subfigure}{0.45\textwidth}
-\includegraphics{./FIGS/PorcentajePositivosEuskadi.pdf}
-\caption{Euskadi}
-\label{}
-\end{subfigure}
-\caption{Porcentaje de tests positivos}
-\label{}
-\end{figure}
+% \begin{figure}[H]
+% \centering
+% \begin{subfigure}{0.45\textwidth}
+% \includegraphics{./FIGS/PorcentajePositivosPorTTHH.pdf}
+% \caption{TTHH en Euskadi}
+% \label{}
+% \end{subfigure}
+% \begin{subfigure}{0.45\textwidth}
+% \includegraphics{./FIGS/PorcentajePositivosEuskadi.pdf}
+% \caption{Euskadi}
+% \label{}
+% \end{subfigure}
+% \caption{Porcentaje de tests positivos}
+% \label{}
+% \end{figure}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 %\section{Hospitalizaciones}
 
 <<echo=FALSE, results=hide>>=
@@ -288,6 +285,7 @@ ggsave(filename="./FIGS/HospitalizacionesTotales.pdf", plot=gg)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 \section{Letalidad}
 
 <<echo=FALSE, results=hide>>=
@@ -344,7 +342,7 @@ print(xtable(posdt), include.rownames=FALSE,table.placement="H")
 
 \noindent \textbf{Letalidad:}
 
-%\hl{ESTO NO COINCIDE CON EL INFORME PUBLICADO POR GV-EJ}
+% \hl{ESTO NO COINCIDE CON EL INFORME PUBLICADO POR GV-EJ}
 
 <<echo=FALSE, results=hide>>=
 dt <- fallecidosbyagedt[date==max(date)]
@@ -377,6 +375,7 @@ ggsave(filename="./FIGS/LetalidadPorEdadYGenero.pdf", plot=gg)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 %\section{Por municipio}
 
 <<echo=FALSE, results=hide>>=
@@ -406,6 +405,7 @@ ggsave(filename="./FIGS/PositivosPorMunicipio.pdf", plot=gg)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 %\section{Por zona de salud}
 
 <<echo=FALSE, results=hide>>=
